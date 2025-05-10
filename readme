@@ -1,0 +1,7 @@
+express: Web framework
+mongoose: MongoDB ODM
+bcryptjs: Password hashing
+jsonwebtoken: For creating JWTs
+dotenv: For environment variables (.env file)
+cors: For enabling Cross-Origin Resource Sharing
+nodemon: For auto-restarting the server during development
