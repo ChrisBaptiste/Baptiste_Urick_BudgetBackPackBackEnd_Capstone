@@ -43,17 +43,21 @@ const TripSchema = new mongoose.Schema({
     },
     destinationCity: {
         type: String,
+        required: [true, 'Destination city is required'], 
         trim: true
     },
     destinationCountry: {
         type: String,
+        required: [true, 'Destination country is required'], 
         trim: true
     },
     startDate: {
-        type: Date
+        type: Date,
+        required: [true, 'Start date is required'] 
     },
     endDate: {
-        type: Date
+        type: Date,
+        required: [true, 'End date is required'] 
     },
     notes: {
         type: String,

@@ -5,75 +5,64 @@ const bcrypt = require('bcryptjs'); // Importing bcrypt for password comparison,
 const jwt = require('jsonwebtoken'); // Importing jsonwebtoken for creating auth tokens.
 const User = require('../models/User'); // Pulling in my User model.
 
-// @route   POST api/auth/register
-// @desc    Registering a new user for the application.
-// @access  Public (anyone can try to register).
+
+
+// ------------   POST api/auth/register
+// -----------    Registering a new user for the application.
 router.post('/register', async (req, res) => {
-    // Destructuring username, email, and password from the request body.
-    // Expecting these fields to come from the registration form.
     const { username, email, password } = req.body;
+    console.log('AUTH_REG: Request to /register received with email:', email, 'and username:', username); 
 
     try {
-        // First, I'm checking if a user already exists with the provided email.
-        // Don't want duplicate email addresses in the system.
         let user = await User.findOne({ email });
         if (user) {
-            // If a user with this email is found, I'm returning a 400 error.
+            console.log('User already exists with email:', email); 
             return res.status(400).json({ errors: [{ msg: 'User already exists with this email' }] });
         }
-
-        // Next, I'm doing a similar check for the username to ensure it's unique.
         user = await User.findOne({ username });
         if (user) {
-            // If the username is taken, I'm sending back another 400 error.
+            console.log('User already exists with username:', username); 
             return res.status(400).json({ errors: [{ msg: 'Username is already taken' }] });
         }
 
-        // If both email and username are unique, I'm creating a new user instance.
-        // The password will be hashed automatically by the pre-save hook in my User model.
         user = new User({
             username,
             email,
             password
         });
 
-        // Now, I'm saving the new user to the database.
-        await user.save();
-        // At this point, the user should be successfully stored in MongoDB.
+        console.log('Attempting to save new user with email:', email); 
+        await user.save(); // This is the database save operation
+        console.log('User with email:', email, 'successfully saved. User ID:', user.id); 
 
-        // I'm preparing the payload for the JWT.
-        // Just need the user's ID to identify them in future requests.
         const payload = {
             user: {
-                id: user.id // Mongoose provides 'id' as a virtual getter for '_id'.
+                id: user.id
             }
         };
 
-        // Now I'm signing the JWT.
-        // Using the secret from my environment variables and setting an expiration.
         jwt.sign(
             payload,
-            process.env.JWT_SECRET, // My secret key, keeping it safe.
-            { expiresIn: '5h' }, // Setting the token to expire in 5 hours.
+            process.env.JWT_SECRET,
+            { expiresIn: '5h' },
             (err, token) => {
-                if (err) throw err; // If something goes wrong during signing, I'm throwing an error.
-                // If successful, I'm sending back the token with a 201 status (Created).
+                if (err) {
+                    console.error('Error signing JWT for user:', email, err); 
+                    throw err;
+                }
                 res.status(201).json({ token });
             }
         );
 
     } catch (err) {
-        // Catching any errors that occur during the try block.
-        console.error("Error during registration:", err.message); // Logging the error for my own debugging.
-
-        // I'm specifically checking for Mongoose validation errors here.
-        // This way, I can send back more specific error messages to the client.
+        // This catch block will now primarily catch errors from findOne, new User, or jwt.sign
+        // Mongoose .save() errors (like validation or DB connection issues during save) might also land here
+        // if not handled by a more specific try/catch around .save() itself (though for now, this is fine).
+        console.error('AUTH_REG: Overall error during registration for email:', email, 'Error:', err); 
         if (err.name === 'ValidationError') {
             const messages = Object.values(err.errors).map(val => val.message);
-            // Formatting the validation messages to match the error structure.
             return res.status(400).json({ errors: messages.map(msg => ({ msg })) });
         }
-        // For any other server-side errors, I'm sending a generic 500 error.
         res.status(500).send('Server error during registration');
     }
 });
