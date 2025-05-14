@@ -9,7 +9,7 @@ const SavedFlightSchema = new mongoose.Schema({
     destination: String,
     departureDate: Date,
     price: Number,
-    details: mongoose.Schema.Types.Mixed // Store the raw API response or key parts
+    details: mongoose.Schema.Types.Mixed // Storing the raw API response or key parts
 }, { _id: false }); 
 
 const SavedAccommodationSchema = new mongoose.Schema({
@@ -65,7 +65,7 @@ const TripSchema = new mongoose.Schema({
     },
     // Arrays to store saved items
     savedFlights: [SavedFlightSchema],
-    savedAccommodations: [SavedAccommodationSchema],
+    // savedAccommodations: [SavedAccommodationSchema],  // will revisit this if i have time
     savedActivities: [SavedActivitySchema],
     createdAt: {
         type: Date,
@@ -74,7 +74,7 @@ const TripSchema = new mongoose.Schema({
 });
 
 
-TripSchema.index({ user: 1 }); // Efficiently fetch trips for a specific user
+TripSchema.index({ user: 1 }); // fetching trips for a specific user
 TripSchema.index({ destinationCity: 'text', tripName: 'text' }); // Example for text search later
 
 module.exports = mongoose.model('Trip', TripSchema);

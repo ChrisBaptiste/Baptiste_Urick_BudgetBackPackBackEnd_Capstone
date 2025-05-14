@@ -57,7 +57,6 @@ router.post('/register', async (req, res) => {
     } catch (err) {
         // This catch block will now primarily catch errors from findOne, new User, or jwt.sign
         // Mongoose .save() errors (like validation or DB connection issues during save) might also land here
-        // if not handled by a more specific try/catch around .save() itself (though for now, this is fine).
         console.error('AUTH_REG: Overall error during registration for email:', email, 'Error:', err); 
         if (err.name === 'ValidationError') {
             const messages = Object.values(err.errors).map(val => val.message);
@@ -68,8 +67,8 @@ router.post('/register', async (req, res) => {
 });
 
 
-//   POST api/auth/login
-//   Authenticating an existing user and getting a token.
+// ----------------------  POST api/auth/login  ------------------------ //
+//   ---------- Authenticating an existing user and getting a token. ------//
 router.post('/login', async (req, res) => {
     // Getting email and password from the request body for login.
     const { email, password } = req.body;

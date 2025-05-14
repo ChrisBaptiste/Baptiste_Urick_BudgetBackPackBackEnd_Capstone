@@ -3,7 +3,9 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware'); // My authentication middleware.
 const Trip = require('../models/Trip'); // My Trip model.
-const User = require('../models/User'); // May need User model for some checks or population.
+const User = require('../models/User'); 
+
+
 
 // -------------------------- POST api/trips  ---------------------------//
 // -----------    Creating a new trip for the logged-in user.  ---------  //
@@ -11,7 +13,7 @@ const User = require('../models/User'); // May need User model for some checks o
 router.post('/', protect, async (req, res) => {
     const { tripName, destinationCity, destinationCountry, startDate, endDate, notes } = req.body;
     // Using req.user.id which comes from the 'protect' middleware
-    console.log(`TRIP_CREATE: Request received by user ${req.user.id} to create trip: ${tripName}`); // <-- ADD THIS
+    console.log(`TRIP_CREATE: Request received by user ${req.user.id} to create trip: ${tripName}`); 
 
     try {
         const newTrip = new Trip({
@@ -24,15 +26,15 @@ router.post('/', protect, async (req, res) => {
             notes
         });
 
-        console.log(`TRIP_CREATE: Attempting to save new trip "${tripName}" for user ${req.user.id}`); // <-- ADD THIS
+        console.log(`TRIP_CREATE: Attempting to save new trip "${tripName}" for user ${req.user.id}`); 
         const trip = await newTrip.save(); // This is the database save operation
-        console.log(`TRIP_CREATE: Trip "${tripName}" for user ${req.user.id} successfully saved. Trip ID: ${trip.id}`); // <-- ADD THIS
+        console.log(`TRIP_CREATE: Trip "${tripName}" for user ${req.user.id} successfully saved. Trip ID: ${trip.id}`); 
 
         res.status(201).json(trip);
 
     } catch (err) {
         // This catch block will catch errors from new Trip() or newTrip.save()
-        console.error(`TRIP_CREATE: Overall error creating trip "${tripName}" for user ${req.user.id}. Error:`, err); // <-- MODIFIED THIS
+        console.error(`TRIP_CREATE: Overall error creating trip "${tripName}" for user ${req.user.id}. Error:`, err); 
         if (err.name === 'ValidationError') {
             const messages = Object.values(err.errors).map(val => val.message);
             return res.status(400).json({ errors: messages.map(msg => ({ msg })) });
@@ -175,7 +177,7 @@ router.delete('/:tripId', protect, async (req, res) => {
 
 
 // We will add routes here later for adding/removing saved flights, accommodations, activities to a trip.
-// For example:
+// like
 // POST /api/trips/:tripId/flights
 // DELETE /api/trips/:tripId/flights/:flightItemId
 

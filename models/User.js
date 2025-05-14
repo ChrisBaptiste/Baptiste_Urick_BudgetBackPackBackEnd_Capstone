@@ -2,7 +2,7 @@
 const mongoose = require("mongoose"); // Importing mongoose to define my schema and model.
 const bcrypt = require("bcryptjs"); // Importing bcrypt for hashing the passwords securely.
 
-// Defining the schema for my User model. This is like the blueprint for user documents.
+// Defining the schema for my User model. This is like the blueprint for my user's documents.
 const UserSchema = new mongoose.Schema({
   username: {
     type: String,
@@ -20,7 +20,7 @@ const UserSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, "Password is required"], // Password is, of course, required.
+    required: [true, "Password is required"], // Password must required.
     validate: {
       // Setting up a custom validator for more complex password rules.
       validator: function (value) {
@@ -69,5 +69,4 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 // Exporting the User model.
-// Mongoose will create a collection named 'users' (pluralized, lowercase version of 'User') in MongoDB.
 module.exports = mongoose.model("User", UserSchema);
