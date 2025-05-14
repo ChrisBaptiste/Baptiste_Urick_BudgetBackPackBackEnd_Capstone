@@ -181,24 +181,24 @@ router.get('/flights', protect, async (req, res) => {
 
             //Debugging kiwi flight api
         }
-    //     console.log(`SEARCH_FLIGHTS: Transformed ${transformedFlights.length} flights.`);
-    //     res.json(transformedFlights);
-    // } catch (error) {
-    //     console.error('SEARCH_FLIGHTS: Error fetching flight data:');
-    //     if (error.response) {
-    //         console.error('Flight Error Data:', JSON.stringify(error.response.data, null, 2));
-    //         console.error('Flight Error Status:', error.response.status);
-    //         res.status(error.response.status).json({
-    //             msg: `Error from flight API: ${error.response.data?.message || 'Failed to fetch flight data'}`,
-    //             details: error.response.data
-    //         });
-    //     } else if (error.request) {
-    //         console.error('Flight Error Request (no response received):', error.request);
-    //         res.status(500).json({ msg: 'No response received from flight API' });
-    //     } else {
-    //         console.error('Flight Error Message (error in setting up request):', error.message);
-    //         res.status(500).json({ msg: 'Error in setting up request to flight API' });
-    //     }
+        console.log(`SEARCH_FLIGHTS: Transformed ${transformedFlights.length} flights.`);
+        res.json(transformedFlights);
+    } catch (error) {
+        console.error('SEARCH_FLIGHTS: Error fetching flight data:');
+        if (error.response) {
+            console.error('Flight Error Data:', JSON.stringify(error.response.data, null, 2));
+            console.error('Flight Error Status:', error.response.status);
+            res.status(error.response.status).json({
+                msg: `Error from flight API: ${error.response.data?.message || 'Failed to fetch flight data'}`,
+                details: error.response.data
+            });
+        } else if (error.request) {
+            console.error('Flight Error Request (no response received):', error.request);
+            res.status(500).json({ msg: 'No response received from flight API' });
+        } else {
+            console.error('Flight Error Message (error in setting up request):', error.message);
+            res.status(500).json({ msg: 'Error in setting up request to flight API' });
+        }
     }
 });
 
@@ -284,7 +284,7 @@ router.get('/events', protect, async (req, res) => {
                     firstPhotoReference: firstPhotoReference, // Pass the reference, frontend can decide
                 
                     imageUrl: null // Set to null for now
-                                   
+                }                 
             });
         } else {
             console.log('SEARCH_EVENTS: No places found or unexpected response structure.');
