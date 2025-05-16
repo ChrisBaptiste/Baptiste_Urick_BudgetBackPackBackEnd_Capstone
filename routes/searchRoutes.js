@@ -268,7 +268,7 @@ router.get('/events', protect, async (req, res) => {
                     id: place.id, // Google Place ID
                     title: place.displayName?.text || 'N/A', // Name of the place
                     address: place.formattedAddress || 'N/A', // Full address
-                    rating: place.rating || null, // Rating (e.g., 4.5)
+                    rating: place.rating || null, // rating of place
                     userRatingCount: place.userRatingCount || 0, // Number of ratings
                     types: place.types || [], // Array of place types (e.g., "restaurant", "park")
                     primaryType: place.primaryTypeDisplayName?.text || (place.types && place.types.length > 0 ? place.types[0] : null),

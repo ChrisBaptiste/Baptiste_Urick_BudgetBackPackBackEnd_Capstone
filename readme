@@ -1,7 +1,126 @@
-express: Web framework
-mongoose: MongoDB ODM
-bcryptjs: Password hashing
-jsonwebtoken: For creating JWTs
-dotenv: For environment variables (.env file)
-cors: For enabling Cross-Origin Resource Sharing
-nodemon: For auto-restarting the server during development
+
+
+# BudgetBackpack - Backend Server
+
+This is the backend server for the BudgetBackpack application, a full-stack travel planning tool. It provides a RESTful API for managing user authentication, trip data, and proxying requests to external travel APIs.
+
+**Link to Frontend Repository:** [https://github.com/ChrisBaptiste/Baptiste_Urick_BudgetBackPackFrrontEnd_Capstone]
+
+## Table of Contents
+1.  Features
+2.  Technologies Used
+3.  Setup and Installation
+4.  Running the Server
+5.  API Endpoints
+6.  Environment Variables
+7.  Author
+8.  credit
+
+
+
+ 1. // ----------- Features --------------//
+
+   Secure user registration and login with JWT authentication.
+   CRUD (Create, Read, Update, Delete) operations for user-specific travel itineraries (trips).
+   API routes to search for:
+   One-way and Round Trip flights (via Kiwi.com API through RapidAPI).
+   Local events/places of interest (via Google Places API through RapidAPI).
+   Data validation using Mongoose schemas.
+   Password hashing using bcrypt.js.
+
+ 2. // --------Technologies Used  --------//
+
+     express: Web framework
+     mongoose: MongoDB ODM
+     bcryptjs: Password hashing
+     jsonwebtoken: For creating JWTs
+     dotenv: For environment variables (.env file)
+     cors: For enabling Cross-Origin Resource Sharing
+     nodemon: For auto-restarting the server during development
+
+
+ 3.   // --------  Setup and Installation  --------------//
+
+ Prerequisites
+   Node.js (v16.x or later recommended)
+   npm (Node Package Manager)
+   MongoDB instance (local or cloud-hosted like MongoDB Atlas)
+   RapidAPI Account (for flight and event search API keys)
+
+///// Steps
+1.  Clone the repository or download the files for this backend
+    
+2.  Navigate to the `BackEnd-Server` directory
+    
+    cd path/to/your/BackEnd-Server
+    
+3.  Install dependencies:
+    
+    npm install
+    
+4.  Create a `.env` file** in the `BackEnd-Server` root directory. 
+
+
+
+
+// -----------  4 Running the Server ----------------//
+
+1.  Ensure your MongoDB instance is running and accessible.
+2.  Start the server using the following command:
+   
+    npm run dev
+    
+    (This assumes a script like `"server": "nodemon server.js"` or `"dev": "nodemon server.js"` in `package.json`. If not, use `node server.js` or `nodemon server.js` directly).*
+3.  The server will typically start on port 5001 (or as specified in your `.env` file) and attempt to connect to MongoDB. Check the console for "MongoDB Connected..." and "Server started on port..." messages.
+
+
+
+ //  ---------------- 5. API Endpoints  ----------------  //
+
+All endpoints are prefixed with `/api`.
+
+ ### Auth (`/auth`)
+   `POST /register`: { `username`, `email`, `password` } -> Creates new user, returns JWT.
+*  `POST /login`: { `email`, `password` } -> Authenticates user, returns JWT.
+
+### Trips (`/trips`) - *Protected*
+   `POST /`: { `tripName`, `destinationCity`, `destinationCountry`, `startDate`, `endDate`, `notes`? } -> Creates a new trip.
+   `GET /`: Returns all trips for the authenticated user.
+   `GET /:tripId`: Returns details for a specific trip.
+   `PUT /:tripId`: { `tripName`?, ... } -> Updates a specific trip.
+   `DELETE /:tripId`: Deletes a specific trip.
+
+### Search (`/search`) - *Protected*
+*   `GET /flights`: Query params: `origin`, `destination`, `departureDate`, `returnDate`?, `adults`? -> Returns flight search results.
+*   `GET /events`: Query params: `destinationCity`, `searchTerm`? -> Returns event/place search results.
+
+// ------------------ 6. Environment Variables ------------------ //
+
+Create a `.env` file in the `BackEnd-Server` root with the following variables:
+
+PORT=5001
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_strong_random_jwt_secret
+RAPIDAPI_KEY=your_rapidapi_account_key
+RAPIDAPI_FLIGHT_API_HOST=kiwi-com-cheap-flights.p.rapidapi.com
+RAPIDAPI_EVENTS_API_HOST=google-map-places-new-v2.p.rapidapi.com
+
+PORT: The port the server will run on.
+MONGO_URI: Your MongoDB connection string.
+JWT_SECRET: A secret key for signing JSON Web Tokens. Make this long and random.
+RAPIDAPI_KEY: Your API key from RapidAPI for accessing external services.
+RAPIDAPI_FLIGHT_API_HOST: Hostname for the Kiwi flight API on RapidAPI.
+RAPIDAPI_EVENTS_API_HOST: Hostname for the Google Places API on RapidAPI.
+
+
+// ------------------- 7 Author ---------------//
+Urick Chris Baptiste
+
+//-------------------- 8 credits  ----------- //
+
+Code Stoic - https://www.youtube.com/@ashutoshpawar (81 short but well explained youtube video tutorials on React)
+web dev cody - https://www.youtube.com/watch?v=dX_LteE0NFM 
+web dev simplified - https://www.youtube.com/watch?v=mbsmsi7l3r4
+freecodecamp - https://www.youtube.com/@freecodecamp
+Bryan Santos - (https://perscholas.instructure.com/courses/2607/external_tools/7337) Office hourse cloud recording
+Tishana Trainor - https://github.com/tishana/express-fruits-2025-04 , https://github.com/tishana/react-fruits-2025-04 (full stack fruit app used as guidance to build my app)
