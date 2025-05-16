@@ -176,9 +176,4 @@ router.delete('/:tripId', protect, async (req, res) => {
 });
 
 
-// We will add routes here later for adding/removing saved flights, accommodations, activities to a trip.
-// like
-// POST /api/trips/:tripId/flights
-// DELETE /api/trips/:tripId/flights/:flightItemId
-
 module.exports = router;

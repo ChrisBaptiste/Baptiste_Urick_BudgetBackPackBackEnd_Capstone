@@ -32,11 +32,7 @@ router.get('/flights', protect, async (req, res) => {
         return `${day}/${month}/${year}`; // Kiwi API uses DD/MM/YYYY for date_from/date_to
     };
     
-    // --- IMPORTANT KIWI API PARAMETER ADJUSTMENT ---
-    // Kiwi API expects date_from, date_to for departure
-    // and return_from, return_to for return dates.
-    // For a specific departure date, date_from and date_to should be the same.
-    // Same thing for return date.
+    
 
     const baseApiParams = {
         fly_from: origin, // Using fly_from for origin
@@ -263,7 +259,6 @@ router.get('/events', protect, async (req, res) => {
                 // Getting an actual image URL requires another API call to GET /v1/places/{place_id}/photos/{PHOTO_RESOURCE_NAME}/media
                 // or by constructing a URL with a Google Cloud API Key (not RapidAPI key).
                 // For my project I'll pass the first photo reference if available for now
-                // The frontend would need to decide how to use it.
                 let firstPhotoReference = null;
                 if (place.photos && place.photos.length > 0 && place.photos[0].name) {
                     firstPhotoReference = place.photos[0].name;
