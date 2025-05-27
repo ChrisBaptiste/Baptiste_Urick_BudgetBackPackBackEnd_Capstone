@@ -1,0 +1,58 @@
+
+> backend-server@1.0.0 dev
+> nodemon server.js
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node server.js`[39m
+Server started on port 5001
+MongoDB Connected...
+SEARCH_ACCOMMODATIONS: Request received for query: london, Check-in: 2025-05-30, Check-out: 2025-06-05, Adults: 1, Currency: USD
+SEARCH_ACCOMMODATIONS: Preparing to call external API.
+SEARCH_ACCOMMODATIONS: API URL: https://airbnb19.p.rapidapi.com/api/v2/searchPropertyByLocation
+SEARCH_ACCOMMODATIONS: API Params to send: {
+  "query": "london",
+  "checkin": "2025-05-30",
+  "checkout": "2025-06-05",
+  "adults": "1",
+  "currency": "USD"
+}
+SEARCH_ACCOMMODATIONS: Attempting to call external Airbnb API...
+SEARCH_ACCOMMODATIONS: External API Response Status: 200
+SEARCH_ACCOMMODATIONS: External API reported success. Found 40 items in 'list'.
+SEARCH_ACCOMMODATIONS: Transformation complete. Found 40 valid accommodations.
+SEARCH_ACCOMMODATIONS: Sample transformed data being sent to frontend (first item): {
+  "id": "1399125200648444745",
+  "name": "Flat in London",
+  "location": "Greater London",
+  "destinationCity": "Greater London",
+  "pricePerNight": null,
+  "totalPrice": null,
+  "currency": "USD",
+  "rating": null,
+  "reviewCount": null,
+  "imageUrl": null,
+  "images": [],
+  "bookingLink": "https://www.airbnb.com/rooms/1399125200648444745",
+  "provider": "Airbnb",
+  "description": "Simple cosy Studio flat @ London",
+  "checkInDate": "2025-05-30",
+  "checkOutDate": "2025-06-05",
+  "numberOfGuests": 1
+}
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+Server started on port 5001
+MongoDB Connected...
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+Server started on port 5001
+MongoDB Connected...
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+Server started on port 5001

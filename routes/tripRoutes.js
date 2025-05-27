@@ -176,4 +176,133 @@ router.delete('/:tripId', protect, async (req, res) => {
 });
 
 
+// --- Add Flight to Trip ---
+router.post('/:tripId/flights', protect, async (req, res) => {
+    const { tripId } = req.params;
+    const flightData = req.body; // Should match SavedFlightSchema
+
+    // Basic validation
+    if (!flightData.flightApiId || !flightData.origin || !flightData.destination || !flightData.departureDate) {
+        return res.status(400).json({ msg: 'Missing required flight data (ID, origin, destination, departureDate).' });
+    }
+
+    try {
+        const trip = await Trip.findById(tripId);
+        if (!trip) return res.status(404).json({ msg: 'Trip not found' });
+        if (trip.user.toString() !== req.user.id) return res.status(401).json({ msg: 'User not authorized' });
+
+        const flightDepartureTime = new Date(flightData.departureDate).getTime();
+        const exists = trip.savedFlights.find(
+            f => f.flightApiId === flightData.flightApiId && new Date(f.departureDate).getTime() === flightDepartureTime
+        );
+        if (exists) {
+            return res.status(400).json({ msg: 'This specific flight is already saved to this trip.' });
+        }
+
+        trip.savedFlights.push(flightData);
+        await trip.save();
+        res.status(201).json(trip.savedFlights);
+    } catch (err) {
+        console.error('TRIP_ADD_FLIGHT Error:', err.message);
+        res.status(500).json({ msg: 'Server error while adding flight to trip' });
+    }
+});
+
+// --- Remove Flight from Trip ---
+// Using flightApiId and departureDate (as timestamp) to uniquely identify the flight to remove
+router.delete('/:tripId/flights/:flightApiId/:departureTimestamp', protect, async (req, res) => {
+    const { tripId, flightApiId, departureTimestamp } = req.params;
+
+    try {
+        const trip = await Trip.findById(tripId);
+        if (!trip) return res.status(404).json({ msg: 'Trip not found' });
+        if (trip.user.toString() !== req.user.id) return res.status(401).json({ msg: 'User not authorized' });
+
+        const initialLength = trip.savedFlights.length;
+        const targetDepartureTime = parseInt(departureTimestamp, 10);
+
+        trip.savedFlights = trip.savedFlights.filter(
+            f => !(f.flightApiId === flightApiId && new Date(f.departureDate).getTime() === targetDepartureTime)
+        );
+
+        if (trip.savedFlights.length === initialLength) {
+            return res.status(404).json({ msg: 'Flight not found in this trip for the specified details.' });
+        }
+
+        await trip.save();
+        res.json(trip.savedFlights);
+    } catch (err) {
+        console.error('TRIP_REMOVE_FLIGHT Error:', err.message);
+        res.status(500).json({ msg: 'Server error while removing flight from trip' });
+    }
+});
+
+
+// --- Add Accommodation to Trip ---
+router.post('/:tripId/accommodations', protect, async (req, res) => {
+    const { tripId } = req.params;
+    const accommodationData = req.body; // Should match SavedAccommodationSchema
+
+    if (!accommodationData.accommodationApiId || !accommodationData.name) {
+        return res.status(400).json({ msg: 'Missing required accommodation data (ID and name).' });
+    }
+     // Add checkInDate for uniqueness if needed
+    if (!accommodationData.checkInDate) {
+        return res.status(400).json({ msg: 'Accommodation check-in date is required.' });
+    }
+
+
+    try {
+        const trip = await Trip.findById(tripId);
+        if (!trip) return res.status(404).json({ msg: 'Trip not found' });
+        if (trip.user.toString() !== req.user.id) return res.status(401).json({ msg: 'User not authorized' });
+
+        const accommodationCheckInTime = new Date(accommodationData.checkInDate).getTime();
+        const exists = trip.savedAccommodations.find(
+            acc => acc.accommodationApiId === accommodationData.accommodationApiId && 
+                   new Date(acc.checkInDate).getTime() === accommodationCheckInTime
+        );
+        if (exists) {
+            return res.status(400).json({ msg: 'This specific accommodation for these dates is already saved.' });
+        }
+
+        trip.savedAccommodations.push(accommodationData);
+        await trip.save();
+        res.status(201).json(trip.savedAccommodations);
+    } catch (err) {
+        console.error('TRIP_ADD_ACCOMMODATION Error:', err.message);
+        res.status(500).json({ msg: 'Server error while adding accommodation to trip' });
+    }
+});
+
+// --- Remove Accommodation from Trip ---
+// Using accommodationApiId and checkInDate (as timestamp) for uniqueness
+router.delete('/:tripId/accommodations/:accommodationApiId/:checkInTimestamp', protect, async (req, res) => {
+    const { tripId, accommodationApiId, checkInTimestamp } = req.params;
+
+    try {
+        const trip = await Trip.findById(tripId);
+        if (!trip) return res.status(404).json({ msg: 'Trip not found' });
+        if (trip.user.toString() !== req.user.id) return res.status(401).json({ msg: 'User not authorized' });
+
+        const initialLength = trip.savedAccommodations.length;
+        const targetCheckInTime = parseInt(checkInTimestamp, 10);
+
+        trip.savedAccommodations = trip.savedAccommodations.filter(
+            acc => !(acc.accommodationApiId === accommodationApiId && new Date(acc.checkInDate).getTime() === targetCheckInTime)
+        );
+
+        if (trip.savedAccommodations.length === initialLength) {
+            return res.status(404).json({ msg: 'Accommodation not found in this trip for the specified details.' });
+        }
+
+        await trip.save();
+        res.json(trip.savedAccommodations);
+    } catch (err) {
+        console.error('TRIP_REMOVE_ACCOMMODATION Error:', err.message);
+        res.status(500).json({ msg: 'Server error while removing accommodation from trip' });
+    }
+});
+
+
 module.exports = router;

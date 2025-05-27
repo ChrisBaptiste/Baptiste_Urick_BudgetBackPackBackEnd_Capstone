@@ -70,49 +70,39 @@ router.post('/register', async (req, res) => {
 // ----------------------  POST api/auth/login  ------------------------ //
 //   ---------- Authenticating an existing user and getting a token. ------//
 router.post('/login', async (req, res) => {
-    // Getting email and password from the request body for login.
     const { email, password } = req.body;
+    console.log('AUTH_LOGIN: Attempting login for email:', email); // Added for debugging
 
     try {
-        // I'm trying to find the user by their email address.
         let user = await User.findOne({ email });
         if (!user) {
-            // If no user is found with that email, it's invalid credentials.
-            // Sending a generic "Invalid credentials" to avoid hinting if email exists or not.
+            console.log('AUTH_LOGIN: User not found for email:', email); // Debugging
             return res.status(400).json({ errors: [{ msg: 'Invalid credentials' }] });
         }
 
-        // If a user is found, I'm now validating the provided password.
-        // Using the 'matchPassword' method I defined on my User model.
         const isMatch = await user.matchPassword(password);
         if (!isMatch) {
-            // If the passwords don't match, it's also invalid credentials.
+            console.log('AUTH_LOGIN: Password mismatch for email:', email); // Debugging
             return res.status(400).json({ errors: [{ msg: 'Invalid credentials' }] });
         }
 
-        // If the user exists and the password matches, I'm creating the JWT payload.
-        // Again, just including the user's ID.
-        const payload = {
-            user: {
-                id: user.id
-            }
-        };
-
-        // Signing the JWT for the authenticated user.
+        const payload = { user: { id: user.id } };
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: '5h' }, // Same expiration as registration for consistency.
+            { expiresIn: '5h' },
             (err, token) => {
-                if (err) throw err; // Handling potential errors during token signing.
-                // Sending back the token on successful login.
+                if (err) {
+                    console.error('AUTH_LOGIN: Error signing JWT for user:', email, err);
+                    throw err; // Will be caught by outer catch
+                }
+                console.log('AUTH_LOGIN: Login successful, token generated for email:', email); // Debugging
                 res.json({ token });
             }
         );
     } catch (err) {
-        // Catching any errors during the login process.
-        console.error("Error during login:", err.message); // Logging for debugging.
-        res.status(500).send('Server error during login'); // Generic server error.
+        console.error("AUTH_LOGIN: Overall error during login for email:", email, "Error:", err.message);
+        res.status(500).send('Server error during login');
     }
 });
 

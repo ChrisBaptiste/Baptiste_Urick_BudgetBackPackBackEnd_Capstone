@@ -1,23 +1,32 @@
 
+// BackEnd-Server/models/Trip.js
 const mongoose = require('mongoose');
 
-// We'll define these sub-schemas in more detail later when integrating APIs
 const SavedFlightSchema = new mongoose.Schema({
-    // Basic fields for now, expand later
-    flightApiId: String, // ID from the flight API
+    flightApiId: String,
     origin: String,
     destination: String,
     departureDate: Date,
     price: Number,
-    details: mongoose.Schema.Types.Mixed // Storing the raw API response or key parts
-}, { _id: false }); 
+    details: mongoose.Schema.Types.Mixed
+}, { _id: false });
 
+// Refined SavedAccommodationSchema
 const SavedAccommodationSchema = new mongoose.Schema({
-    accommodationApiId: String,
-    name: String,
+    accommodationApiId: { type: String, required: true },
+    name: { type: String, required: true },
     location: String,
+    destinationCity: String,
     checkInDate: Date,
-    price: Number,
+    checkOutDate: Date,
+    pricePerNight: Number,
+    totalPrice: Number, // If available from API
+    currency: String,
+    numberOfGuests: Number,
+    rating: Number,
+    imageUrl: String,
+    bookingLink: String,
+    provider: String,
     details: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
@@ -34,7 +43,7 @@ const TripSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
         required: true,
-        ref: 'User' // Reference to the User model
+        ref: 'User'
     },
     tripName: {
         type: String,
@@ -43,29 +52,28 @@ const TripSchema = new mongoose.Schema({
     },
     destinationCity: {
         type: String,
-        required: [true, 'Destination city is required'], 
+        required: [true, 'Destination city is required'],
         trim: true
     },
     destinationCountry: {
         type: String,
-        required: [true, 'Destination country is required'], 
+        required: [true, 'Destination country is required'],
         trim: true
     },
     startDate: {
         type: Date,
-        required: [true, 'Start date is required'] 
+        required: [true, 'Start date is required']
     },
     endDate: {
         type: Date,
-        required: [true, 'End date is required'] 
+        required: [true, 'End date is required']
     },
     notes: {
         type: String,
         trim: true
     },
-    // Arrays to store saved items
     savedFlights: [SavedFlightSchema],
-    // savedAccommodations: [SavedAccommodationSchema],  // will revisit this if i have time
+    savedAccommodations: [SavedAccommodationSchema], // Now using the refined schema
     savedActivities: [SavedActivitySchema],
     createdAt: {
         type: Date,
@@ -73,8 +81,7 @@ const TripSchema = new mongoose.Schema({
     }
 });
 
-
-TripSchema.index({ user: 1 }); // fetching trips for a specific user
-TripSchema.index({ destinationCity: 'text', tripName: 'text' }); // Example for text search later
+TripSchema.index({ user: 1 });
+TripSchema.index({ destinationCity: 'text', tripName: 'text' });
 
 module.exports = mongoose.model('Trip', TripSchema);
