@@ -408,6 +408,8 @@ router.get("/flights", protect, async (req, res) => {
 
 
 // ---------------------- ACCOMMODATIONS ROUTE (for Airbnb19 API) ---------------------------- //
+
+// ENHANCED ACCOMMODATION ROUTE - Replace your existing one
 router.get('/accommodations', protect, async (req, res) => {
     const {
         destinationCity,
@@ -415,20 +417,11 @@ router.get('/accommodations', protect, async (req, res) => {
         checkOutDate,
         adults = '1',
         currency = 'USD',
-        // Potential future filter params from req.query:
-        // priceMin, priceMax, minBedrooms, etc.
     } = req.query;
 
     if (!destinationCity || !checkInDate || !checkOutDate) {
-        console.log('SEARCH_ACCOMMODATIONS_VALIDATION_ERROR: Missing required fields.');
         return res.status(400).json({ msg: 'Please provide destination, check-in date, and check-out date.' });
     }
-    if (new Date(checkInDate) >= new Date(checkOutDate)) {
-        console.log('SEARCH_ACCOMMODATIONS_VALIDATION_ERROR: Invalid date range.');
-        return res.status(400).json({ msg: 'Check-out date must be after check-in date.' });
-    }
-
-    console.log(`SEARCH_ACCOMMODATIONS: Request received for query: ${destinationCity}, Check-in: ${checkInDate}, Check-out: ${checkOutDate}, Adults: ${adults}, Currency: ${currency}`);
 
     const apiParams = {
         query: destinationCity,
@@ -437,9 +430,6 @@ router.get('/accommodations', protect, async (req, res) => {
         adults: adults,
         currency: currency,
     };
-    // Add optional filter params if they exist in req.query
-    // Example: if (req.query.priceMin) apiParams.priceMin = parseInt(req.query.priceMin);
-    // Example: if (req.query.minBedrooms) apiParams.minBedrooms = parseInt(req.query.minBedrooms);
 
     const optionsAccommodation = {
         method: 'GET',
@@ -451,168 +441,143 @@ router.get('/accommodations', protect, async (req, res) => {
         }
     };
 
-    console.log('SEARCH_ACCOMMODATIONS: Preparing to call external API.');
-    console.log('SEARCH_ACCOMMODATIONS: API URL:', optionsAccommodation.url);
-    console.log('SEARCH_ACCOMMODATIONS: API Params to send:', JSON.stringify(apiParams, null, 2));
-
     try {
-        console.log('SEARCH_ACCOMMODATIONS: Attempting to call external Airbnb API...');
         const response = await axios.request(optionsAccommodation);
         
-         console.log('SEARCH_ACCOMMODATIONS: External API Response Status:', response.status);
-    
-    // --- START OF FORCED DEBUG LOGGING ---
-    console.log('SEARCH_ACCOMMODATIONS: ---- START RAW RESPONSE.DATA DEBUG ----');
-    if (response && response.data) {
-        console.log('SEARCH_ACCOMMODATIONS: type of response.data:', typeof response.data);
-        // Attempt to log the whole response.data - if too big, terminal might truncate
-        // but we at least want to see its top-level keys.
-        try {
-            console.log('SEARCH_ACCOMMODATIONS: response.data (full or partial):', JSON.stringify(response.data, null, 2));
-        } catch (e) {
-            console.error('SEARCH_ACCOMMODATIONS: Error stringifying response.data:', e.message);
-            console.log('SEARCH_ACCOMMODATIONS: response.data (raw object, might be complex):', response.data);
-        }
-
-        if (response.data.data && response.data.data.list && Array.isArray(response.data.data.list) && response.data.data.list.length > 0) {
-            console.log('SEARCH_ACCOMMODATIONS: ---- RAW API response for FIRST LISTING ITEM ----');
-            console.log(JSON.stringify(response.data.data.list[0], null, 2));
-            console.log('SEARCH_ACCOMMODATIONS: ---- END RAW API response for FIRST LISTING ITEM ----');
-        } else {
-            console.log('SEARCH_ACCOMMODATIONS: ---- Could not find response.data.data.list[0] ----');
-            console.log('SEARCH_ACCOMMODATIONS: response.data.data exists?', !!response.data.data);
-            if (response.data.data) {
-                console.log('SEARCH_ACCOMMODATIONS: response.data.data.list exists and is array?', Array.isArray(response.data.data.list));
-                if (Array.isArray(response.data.data.list)) {
-                    console.log('SEARCH_ACCOMMODATIONS: response.data.data.list length:', response.data.data.list.length);
-                }
-            }
-        }
-    } else {
-        console.log('SEARCH_ACCOMMODATIONS: ---- response.data is missing or undefined ----');
-    }
-    console.log('SEARCH_ACCOMMODATIONS: ---- END RAW RESPONSE.DATA DEBUG ----');
-
         let transformedAccommodations = [];
-        if (response.data && typeof response.data.status === 'boolean' && response.data.data && Array.isArray(response.data.data.list)) {
-            if (response.data.status === true) {
-                console.log(`SEARCH_ACCOMMODATIONS: External API reported success. Items in 'list': ${response.data.data.list.length}`);
-                transformedAccommodations = response.data.data.list.map(item => {
-                    const listing = item.listing;
-                    if (!listing || !listing.id) {
-                        console.warn('SEARCH_ACCOMMODATIONS_TRANSFORM_WARN: Item in list missing "listing" object or listing.id. Skipping item.');
-                        return null; 
-                    }
+        if (response.data?.status === true && response.data?.data?.list) {
+            console.log(`Found ${response.data.data.list.length} accommodations`);
+            
+            transformedAccommodations = response.data.data.list.map(item => {
+                const listing = item.listing || item;
+                
+                // ENHANCED: Try multiple price extraction paths
+                let pricePerNight = null;
+                let totalPrice = null;
+                
+                // Method 1: Direct price fields
+                if (listing.price?.amount) pricePerNight = parseFloat(listing.price.amount);
+                if (listing.price?.total) totalPrice = parseFloat(listing.price.total);
+                
+                // Method 2: Pricing object
+                if (listing.pricing?.rate?.amount) pricePerNight = parseFloat(listing.pricing.rate.amount);
+                if (listing.pricing?.total?.amount) totalPrice = parseFloat(listing.pricing.total.amount);
+                
+                // Method 3: Display price strings
+                if (listing.displayPrice) {
+                    const priceMatch = listing.displayPrice.match(/[\d,]+\.?\d*/);
+                    if (priceMatch) pricePerNight = parseFloat(priceMatch[0].replace(/,/g, ''));
+                }
+                
+                // Method 4: Structured display price
+                if (listing.structuredDisplayPrice?.primaryLine?.price) {
+                    const priceStr = listing.structuredDisplayPrice.primaryLine.price;
+                    const match = priceStr.match(/[\d,]+\.?\d*/);
+                    if (match) pricePerNight = parseFloat(match[0].replace(/,/g, ''));
+                }
 
-                    let currentPricePerNight = null;
-                    let currentTotalPrice = null;
-                    let currentRating = null;
-                    let currentReviewCount = null;
-                    let currentImageUrl = null;
-                    let currentImages = [];
+                // ENHANCED: Try multiple image extraction paths
+                let imageUrl = null;
+                let images = [];
+                
+                // Method 1: Direct images array
+                if (listing.images?.length > 0) {
+                    imageUrl = listing.images[0].url || listing.images[0].baseUrl || listing.images[0];
+                    images = listing.images.map(img => img.url || img.baseUrl || img).filter(Boolean);
+                }
+                
+                // Method 2: Picture URLs
+                if (!imageUrl && listing.pictureUrls?.length > 0) {
+                    imageUrl = listing.pictureUrls[0];
+                    images = listing.pictureUrls.slice(0, 5);
+                }
+                
+                // Method 3: Contextual pictures
+                if (!imageUrl && listing.contextualPictures?.length > 0) {
+                    imageUrl = listing.contextualPictures[0].picture;
+                    images = listing.contextualPictures.map(p => p.picture).filter(Boolean);
+                }
+                
+                // Method 4: Photo object
+                if (!imageUrl && listing.photo?.picture) {
+                    imageUrl = listing.photo.picture;
+                    images = [listing.photo.picture];
+                }
 
-                    // --- Price Extraction ---
-                    const primaryLine = listing.structuredDisplayPrice?.primaryLine;
-                    if (primaryLine) {
-                        let priceString = primaryLine.price; 
-                        if (primaryLine.__typename === "DiscountedDisplayPriceLine" && primaryLine.discountedPrice) {
-                            priceString = primaryLine.discountedPrice;
-                        }
-                        if (priceString && typeof priceString === 'string') {
-                            const priceMatch = priceString.match(/[\d\.]+/);
-                            if (priceMatch && priceMatch[0]) {
-                                currentPricePerNight = parseFloat(priceMatch[0]);
-                            }
-                        }
-                    }
-                    const secondaryLine = listing.structuredDisplayPrice?.secondaryLine;
-                    if (secondaryLine?.price && typeof secondaryLine.price === 'string') {
-                        const totalMatch = secondaryLine.price.match(/[\d\.]+/);
-                        if (totalMatch && totalMatch[0]) {
-                            currentTotalPrice = parseFloat(totalMatch[0]);
-                        }
-                    }
-
-                    // --- Rating and Review Count Extraction ---
-                    if (listing.avgRatingLocalized && typeof listing.avgRatingLocalized === 'string') {
-                        const ratingMatch = listing.avgRatingLocalized.match(/^([\d\.]+)/);
-                        if (ratingMatch && ratingMatch[1]) {
-                            currentRating = parseFloat(ratingMatch[1]);
-                        }
-                        const reviewMatch = listing.avgRatingLocalized.match(/\(([\d,]+)\)/);
-                        if (reviewMatch && reviewMatch[1]) {
-                            currentReviewCount = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
-                        }
-                    }
-                    if (currentRating === null && listing.ratingAverage !== undefined && listing.ratingAverage !== null) {
-                         currentRating = parseFloat(listing.ratingAverage);
-                    }
-                    if (currentReviewCount === null && listing.ratingCount !== undefined && listing.ratingCount !== null) {
-                        currentReviewCount = parseInt(listing.ratingCount, 10);
-                    }
-
-                    // --- Image Extraction ---
-                    if (listing.contextualPictures && Array.isArray(listing.contextualPictures)) {
-                        if (listing.contextualPictures.length > 0 && listing.contextualPictures[0]?.picture) {
-                            currentImageUrl = listing.contextualPictures[0].picture;
-                        }
-                        currentImages = listing.contextualPictures.map(p => p.picture).filter(p => typeof p === 'string');
-                    }
+                // ENHANCED: Try multiple rating extraction paths
+                let rating = null;
+                let reviewCount = null;
+                
+                // Method 1: Avg rating localized
+                if (listing.avgRatingLocalized) {
+                    const ratingMatch = listing.avgRatingLocalized.match(/^([\d\.]+)/);
+                    if (ratingMatch) rating = parseFloat(ratingMatch[1]);
                     
-                    const airbnbUrl = `https://www.airbnb.com/rooms/${listing.id}`;
+                    const reviewMatch = listing.avgRatingLocalized.match(/\(([\d,]+)\)/);
+                    if (reviewMatch) reviewCount = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
+                }
+                
+                // Method 2: Direct rating fields  
+                if (!rating && listing.avgRating) rating = parseFloat(listing.avgRating);
+                if (!rating && listing.rating) rating = parseFloat(listing.rating);
+                if (!reviewCount && listing.reviewsCount) reviewCount = parseInt(listing.reviewsCount, 10);
 
-                    return {
-                        id: listing.id,
-                        name: listing.title || listing.legacyName || "N/A",
-                        location: listing.demandStayListing?.location?.localizedCityName || listing.demandStayListing?.location?.city || listing.legacyCity || destinationCity,
-                        destinationCity: listing.demandStayListing?.location?.city || listing.legacyCity || destinationCity,
-                        pricePerNight: currentPricePerNight,
-                        totalPrice: currentTotalPrice,
-                        currency: currency, // Use the currency from the request, API should respect it
-                        rating: currentRating,
-                        reviewCount: currentReviewCount,
-                        imageUrl: currentImageUrl,
-                        images: currentImages,
-                        bookingLink: airbnbUrl,
-                        provider: 'Airbnb',
-                        description: listing.legacyName || listing.title || "No description available.",
-                        checkInDate: checkInDate,
-                        checkOutDate: checkOutDate,
-                        numberOfGuests: parseInt(adults, 10),
-                    };
-                }).filter(hotel => hotel !== null); // Filter out items that were skipped (returned null)
-            } else {
-                 console.log('SEARCH_ACCOMMODATIONS_WARN: External API reported status:false. Message:', response.data.message);
-            }
-        } else {
-            console.log('SEARCH_ACCOMMODATIONS_WARN: Unexpected response structure from Airbnb API or missing data.data.list. Full response.data:', JSON.stringify(response.data, null, 2));
+                // ENHANCED: Better name extraction
+                let name = 'Accommodation';
+                if (listing.title) name = listing.title;
+                else if (listing.name) name = listing.name;
+                else if (listing.listingName) name = listing.listingName;
+                else if (listing.displayName) name = listing.displayName;
+
+                return {
+                    id: listing.id,
+                    name: name,
+                    location: listing.city || listing.neighborhood || destinationCity,
+                    destinationCity: destinationCity,
+                    pricePerNight: pricePerNight,
+                    totalPrice: totalPrice,
+                    currency: currency,
+                    rating: rating,
+                    reviewCount: reviewCount,
+                    imageUrl: imageUrl,
+                    images: images,
+                    bookingLink: `https://www.airbnb.com/rooms/${listing.id}`,
+                    provider: 'Airbnb',
+                    description: name,
+                    checkInDate: checkInDate,
+                    checkOutDate: checkOutDate,
+                    numberOfGuests: parseInt(adults, 10),
+                    // Debug info (only in development)
+                    ...(process.env.NODE_ENV === 'development' && {
+                        _debug: {
+                            hasPrice: !!pricePerNight,
+                            hasImage: !!imageUrl,
+                            hasRating: !!rating,
+                            originalKeys: Object.keys(listing)
+                        }
+                    })
+                };
+            }).filter(Boolean);
         }
 
-        console.log(`SEARCH_ACCOMMODATIONS: Transformation complete. Found ${transformedAccommodations.length} valid accommodations.`);
+        // Enhanced logging
+        const summary = {
+            total: transformedAccommodations.length,
+            withPrices: transformedAccommodations.filter(h => h.pricePerNight).length,
+            withImages: transformedAccommodations.filter(h => h.imageUrl).length,
+            withRatings: transformedAccommodations.filter(h => h.rating).length
+        };
+        
+        console.log(`Transformation complete: ${JSON.stringify(summary)}`);
+        
         if (transformedAccommodations.length > 0) {
-            console.log('SEARCH_ACCOMMODATIONS: Sample transformed data being sent to frontend (first item):', JSON.stringify(transformedAccommodations[0], null, 2));
-        } else {
-            console.log('SEARCH_ACCOMMODATIONS: No accommodations to send to frontend after transformation.');
+            console.log('Sample result:', JSON.stringify(transformedAccommodations[0], null, 2));
         }
-        res.json(transformedAccommodations);
 
+        res.json(transformedAccommodations);
     } catch (error) {
-        console.error('SEARCH_ACCOMMODATIONS: FATAL ERROR during external API call or processing:');
-        if (error.response) {
-            console.error('External API Error - Status:', error.response.status);
-            console.error('External API Error - Data:', JSON.stringify(error.response.data, null, 2));
-            res.status(error.response.status).json({
-                msg: `Error from accommodation API: ${error.response.data?.message || error.response.data?.title || 'Failed to fetch accommodation data (API Error)'}`,
-                details: error.response.data
-            });
-        } else if (error.request) {
-            console.error('External API Error - No response received.');
-            res.status(502).json({ msg: 'No response received from accommodation API (Bad Gateway / Timeout)' });
-        } else {
-            console.error('External API Error - Error in setting up request:', error.message);
-            console.error('External API Error - Stack for setup error:', error.stack);
-            res.status(500).json({ msg: 'Error in setting up request to accommodation API (Internal Server Error)' });
-        }
+        console.error('Accommodation search error:', error.response?.data || error.message);
+        res.status(500).json({ msg: 'Failed to fetch accommodations' });
     }
 });
 
@@ -753,6 +718,47 @@ router.get("/events", protect, async (req, res) => {
         .status(500)
         .json({ msg: "Error in setting up request to event/place API" });
     }
+  }
+});
+
+
+// DEBUG ROUTE - Add temporarily to see raw response structure  
+router.get('/debug-raw-accommodation', protect, async (req, res) => {
+  const apiParams = {
+    query: 'Brooklyn',
+    checkin: '2025-05-31',
+    checkout: '2025-06-07',
+    adults: '1',
+    currency: 'USD',
+  };
+
+  const optionsAccommodation = {
+    method: 'GET',
+    url: `https://${process.env.RAPIDAPI_ACCOMMODATION_API_HOST}/api/v2/searchPropertyByLocation`,
+    params: apiParams,
+    headers: {
+      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+      'X-RapidAPI-Host': process.env.RAPIDAPI_ACCOMMODATION_API_HOST
+    }
+  };
+
+  try {
+    const response = await axios.request(optionsAccommodation);
+    
+    // Log the FIRST item's structure in detail
+    if (response.data?.data?.list?.[0]) {
+      const firstItem = response.data.data.list[0];
+      console.log('=== COMPLETE FIRST ITEM STRUCTURE ===');
+      console.log(JSON.stringify(firstItem, null, 2));
+    }
+
+    res.json({
+      totalItems: response.data?.data?.list?.length || 0,
+      firstItemComplete: response.data?.data?.list?.[0] || null
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

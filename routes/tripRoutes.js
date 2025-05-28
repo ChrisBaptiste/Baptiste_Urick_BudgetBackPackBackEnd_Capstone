@@ -277,6 +277,7 @@ router.post('/:tripId/accommodations', protect, async (req, res) => {
 
 // --- Remove Accommodation from Trip ---
 // Using accommodationApiId and checkInDate (as timestamp) for uniqueness
+
 router.delete('/:tripId/accommodations/:accommodationApiId/:checkInTimestamp', protect, async (req, res) => {
     const { tripId, accommodationApiId, checkInTimestamp } = req.params;
 
