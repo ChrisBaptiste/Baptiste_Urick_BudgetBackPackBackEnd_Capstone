@@ -5,7 +5,9 @@ const axios = require("axios");
 const { protect } = require("../middleware/authMiddleware");
 const util = require('util');
 
+
 // ----------------------FLIGHTS ROUTE  ---------------------------- //
+
 router.get("/flights", protect, async (req, res) => {
   const {
     origin,
@@ -25,101 +27,136 @@ router.get("/flights", protect, async (req, res) => {
       .json({ msg: "Please provide origin, destination, and departure date." });
   }
 
-  const formatDateTimeForKiwiAPI = (dateString) => {
+  // Helper function to format dates for Kiwi API (YYYY-MM-DDTHH:MM:SS)
+  const formatDateTimeForKiwi = (dateString) => {
     if (!dateString) return undefined;
-    // if dateString is YYYY-MM-DD
-    const [year, month, day] = dateString.split("-");
-    return `${day}/${month}/${year}`; // Kiwi API uses DD/MM/YYYY for date_from/date_to
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.error('Invalid date provided:', dateString);
+        return undefined;
+      }
+      return `${dateString}T00:00:00`;
+    } catch (error) {
+      console.error('Error formatting date for Kiwi API:', error);
+      return undefined;
+    }
   };
 
-  const baseApiParams = {
-    fly_from: origin, // Using fly_from for origin
-    fly_to: destination, // Using fly_to for destination
-    adults: parseInt(adults, 10),
-    children: parseInt(children, 10),
-    infants: parseInt(infants, 10),
-    curr: "USD", // Currency
-    locale: "en",
-    limit: 15, // Number of results (default is 20)
+  // Helper function to add/subtract days from a date
+  const addDays = (dateString, days) => {
+    const date = new Date(dateString);
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
   };
 
-  if (sortBy) {
-    // Kiwi sort options: price, duration, quality, date
-    baseApiParams.sort = sortBy.toLowerCase();
-  }
-
-  if (maxStopovers !== undefined && ["0", "1", "2"].includes(maxStopovers)) {
-    baseApiParams.max_stopovers = parseInt(maxStopovers, 10); // max_stopovers for direct Kiwi
-  }
+  // Helper function to create flexible date ranges
+  const createFlexibleDateRange = (targetDate, flexDays = 3) => {
+    const startDate = addDays(targetDate, -flexDays);
+    const endDate = addDays(targetDate, flexDays);
+    return {
+      start: formatDateTimeForKiwi(startDate),
+      end: formatDateTimeForKiwi(endDate)
+    };
+  };
 
   let requestUrl;
-  let specificApiParams = { ...baseApiParams };
-  const formattedDepartureDate = formatDateTimeForKiwiAPI(departureDate);
-
-  specificApiParams.date_from = formattedDepartureDate;
-  specificApiParams.date_to = formattedDepartureDate;
-
-  const originalKiwiParams = {
-    source: origin,
-    destination: destination,
-    adults: parseInt(adults, 10),
-    children: parseInt(children, 10),
-    infants: parseInt(infants, 10),
-    currency: "USD",
-    locale: "en",
-    limit: 15,
-  };
-  if (sortBy) {
-    originalKiwiParams.sortBy = sortBy.toUpperCase();
-  }
-  if (maxStopovers !== undefined && ["0", "1", "2"].includes(maxStopovers)) {
-    originalKiwiParams.maxStopsCount = parseInt(maxStopovers, 10);
-  }
-
-  let specificKiwiWrapperParams = { ...originalKiwiParams };
-
-  // Re-using your original date formatting for the Kiwi wrapper if it worked.
-  const formatDateTimeForKiwiWrapper = (dateString) => {
-    if (!dateString) return undefined;
-    return `${dateString}T00:00:00`; // YYYY-MM-DDTHH:MM:SS
-  };
-
-  const formattedDepartureDateTime =
-    formatDateTimeForKiwiWrapper(departureDate);
+  let apiParams = {};
 
   if (returnDate) {
-    console.log("SEARCH_FLIGHTS: Detected ROUND TRIP search.");
+    // ROUND-TRIP API ENDPOINT WITH FLEXIBLE DATE RANGES
+    console.log("SEARCH_FLIGHTS: Detected ROUND TRIP search - Using flexible date ranges");
     requestUrl = "https://kiwi-com-cheap-flights.p.rapidapi.com/round-trip";
-    specificKiwiWrapperParams.outboundDepartmentDateStart =
-      formattedDepartureDateTime;
-    specificKiwiWrapperParams.outboundDepartmentDateEnd =
-      formattedDepartureDateTime;
-    const formattedReturnDateTime = formatDateTimeForKiwiWrapper(returnDate);
-    specificKiwiWrapperParams.inboundDepartureDateStart =
-      formattedReturnDateTime;
-    specificKiwiWrapperParams.inboundDepartureDateEnd = formattedReturnDateTime;
-    if (
-      specificKiwiWrapperParams.sortBy === "PRICE" ||
-      specificKiwiWrapperParams.sortBy === "DURATION"
-    ) {
-      specificKiwiWrapperParams.sortOrder = "ASCENDING";
+    
+    // Create flexible date ranges (±3 days around selected dates)
+    const departureRange = createFlexibleDateRange(departureDate, 3);
+    const returnRange = createFlexibleDateRange(returnDate, 3);
+    
+    console.log(`SEARCH_FLIGHTS: Flexible departure range: ${departureRange.start} to ${departureRange.end}`);
+    console.log(`SEARCH_FLIGHTS: Flexible return range: ${returnRange.start} to ${returnRange.end}`);
+    
+    // Using the CORRECT parameter names with flexible date ranges
+    apiParams = {
+      source: origin,
+      destination: destination,
+      currency: "USD",
+      locale: "en", 
+      adults: parseInt(adults, 10),
+      children: parseInt(children, 10),
+      infants: parseInt(infants, 10),
+      handbags: 1,
+      holdbags: 0,
+      cabinClass: "ECONOMY",
+      sortBy: sortBy.toUpperCase(),
+      sortOrder: "ASCENDING",
+      transportTypes: "FLIGHT",
+      limit: 20, // Increased limit for more options
+      // FLEXIBLE DATE RANGES
+      outboundDepartmentDateStart: departureRange.start,
+      outboundDepartmentDateEnd: departureRange.end,
+      inboundDepartureDateStart: returnRange.start,
+      inboundDepartureDateEnd: returnRange.end,
+      // Additional flexibility options
+      allowReturnFromDifferentCity: "false",
+      allowChangeInboundDestination: "false",
+      allowChangeInboundSource: "false",
+      allowDifferentStationConnection: "true",
+      enableSelfTransfer: "false",
+      allowOvernightStopover: "true",
+    };
+
+    // Add stopover filtering if specified
+    if (maxStopovers !== undefined && ["0", "1", "2"].includes(maxStopovers)) {
+      apiParams.maxStopsCount = parseInt(maxStopovers, 10);
     }
+
+    // Map frontend sortBy values to Kiwi API values
+    if (sortBy === "PRICE") apiParams.sortBy = "PRICE";
+    else if (sortBy === "DURATION") apiParams.sortBy = "DURATION";
+    else if (sortBy === "QUALITY") apiParams.sortBy = "QUALITY";
+    else apiParams.sortBy = "PRICE"; // default
+
   } else {
-    console.log("SEARCH_FLIGHTS: Detected ONE-WAY search.");
+    // ONE-WAY API ENDPOINT WITH SLIGHT FLEXIBILITY
+    console.log("SEARCH_FLIGHTS: Detected ONE-WAY search - Using flexible date range");
     requestUrl = "https://kiwi-com-cheap-flights.p.rapidapi.com/one-way";
-    specificKiwiWrapperParams.outboundDepartmentDateStart =
-      formattedDepartureDateTime;
-    specificKiwiWrapperParams.outboundDepartmentDateEnd =
-      formattedDepartureDateTime;
+    
+    // Create flexible date range for one-way (±2 days for more options)
+    const departureRange = createFlexibleDateRange(departureDate, 2);
+    
+    console.log(`SEARCH_FLIGHTS: Flexible departure range: ${departureRange.start} to ${departureRange.end}`);
+    
+    apiParams = {
+      source: origin,
+      destination: destination,
+      adults: parseInt(adults, 10),
+      children: parseInt(children, 10),
+      infants: parseInt(infants, 10),
+      currency: "USD",
+      locale: "en",
+      limit: 15,
+      sortBy: sortBy.toUpperCase(),
+      // FLEXIBLE DATE RANGE FOR ONE-WAY
+      outboundDepartmentDateStart: departureRange.start,
+      outboundDepartmentDateEnd: departureRange.end,
+    };
+
+    if (maxStopovers !== undefined && ["0", "1", "2"].includes(maxStopovers)) {
+      apiParams.maxStopsCount = parseInt(maxStopovers, 10);
+    }
+
+    if (apiParams.sortBy === "PRICE" || apiParams.sortBy === "DURATION") {
+      apiParams.sortOrder = "ASCENDING";
+    }
   }
 
   console.log(`SEARCH_FLIGHTS: Requesting URL: ${requestUrl}`);
-  console.log("SEARCH_FLIGHTS: API Params to send:", specificKiwiWrapperParams);
+  console.log("SEARCH_FLIGHTS: API Params to send:", JSON.stringify(apiParams, null, 2));
 
   const optionsFlight = {
     method: "GET",
     url: requestUrl,
-    params: specificKiwiWrapperParams, // Using wrapper-specific params
+    params: apiParams,
     headers: {
       "X-RapidAPI-Key": process.env.RAPIDAPI_KEY,
       "X-RapidAPI-Host": process.env.RAPIDAPI_FLIGHT_API_HOST,
@@ -128,113 +165,246 @@ router.get("/flights", protect, async (req, res) => {
 
   try {
     const response = await axios.request(optionsFlight);
-    console.log(
-      "SEARCH_FLIGHTS: Raw response status from external API:",
-      response.status
-    );
+    console.log("SEARCH_FLIGHTS: Raw response status from external API:", response.status);
 
     let transformedFlights = [];
-    if (response.data && Array.isArray(response.data.itineraries)) {
-      transformedFlights = response.data.itineraries.map((itinerary) => {
-        let flightPrice = itinerary.price?.amount;
-        let bookingLink = null;
-        if (
-          itinerary.bookingOptions?.edges?.length > 0 &&
-          itinerary.bookingOptions.edges[0].node
-        ) {
-          const primaryBookingOption = itinerary.bookingOptions.edges[0].node;
-          flightPrice = primaryBookingOption.price?.amount || flightPrice;
-          if (primaryBookingOption.bookingUrl) {
-            bookingLink = primaryBookingOption.bookingUrl.startsWith("/")
-              ? `https://www.kiwi.com${primaryBookingOption.bookingUrl}`
-              : primaryBookingOption.bookingUrl;
-          }
-        }
-        const firstSegment = itinerary.sector?.sectorSegments?.[0]?.segment;
-        const departureInfo = firstSegment?.source;
-        const arrivalInfo = firstSegment?.destination;
-        const carrierInfo = firstSegment?.carrier;
-        const formatDuration = (totalSeconds) => {
-          if (
-            totalSeconds === null ||
-            totalSeconds === undefined ||
-            isNaN(totalSeconds)
-          )
-            return "N/A";
-          const hours = Math.floor(totalSeconds / 3600);
-          const minutes = Math.floor((totalSeconds % 3600) / 60);
-          let durationStr = "";
-          if (hours > 0) durationStr += `${hours}h `;
-          if (minutes >= 0) durationStr += `${minutes}m`;
-          return durationStr.trim() || "0m";
-        };
-        return {
-          id: itinerary.id || itinerary.legacyId,
-          price: flightPrice ? parseFloat(flightPrice) : null,
-          currency:
-            response.data.currency ||
-            response.data.metadata?.currency ||
-            itinerary.price?.currency ||
-            specificKiwiWrapperParams.currency ||
-            "USD",
-          departureCity: departureInfo?.station?.city?.name || "N/A",
-          departureAirport: departureInfo?.station?.name || "N/A",
-          departureAirportCode: departureInfo?.station?.code || "N/A",
-          departureTimeLocal: departureInfo?.localTime || "N/A",
-          departureTimeUTC: departureInfo?.utcTime || "N/A",
-          arrivalCity: arrivalInfo?.station?.city?.name || "N/A",
-          arrivalAirport: arrivalInfo?.station?.name || "N/A",
-          arrivalAirportCode: arrivalInfo?.station?.code || "N/A",
-          arrivalTimeLocal: arrivalInfo?.localTime || "N/A",
-          arrivalTimeUTC: arrivalInfo?.utcTime || "N/A",
-          durationInSeconds:
-            firstSegment?.duration === undefined ? null : firstSegment.duration,
-          durationFormatted: formatDuration(firstSegment?.duration),
-          airlineName: carrierInfo?.name || "N/A",
-          airlineCode: carrierInfo?.code || "N/A",
-          flightNumber: firstSegment?.code || "N/A",
-          bookingLink: bookingLink,
-          provider: itinerary.provider?.name || "Kiwi.com",
-        };
-      });
+    
+    // Helper functions for data transformation
+    const formatDuration = (totalSeconds) => {
+      if (!totalSeconds || totalSeconds === null || totalSeconds === undefined || isNaN(totalSeconds)) {
+        return "Duration not available";
+      }
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      let durationStr = "";
+      if (hours > 0) durationStr += `${hours}h `;
+      if (minutes >= 0) durationStr += `${minutes}m`;
+      return durationStr.trim() || "0m";
+    };
 
-      //Debugging kiwi flight api
+    const parsePrice = (priceValue) => {
+      if (!priceValue) return null;
+      const parsed = parseFloat(priceValue);
+      return isNaN(parsed) ? null : parsed;
+    };
+
+    const extractBookingLink = (itinerary) => {
+      let bookingLink = null;
+      if (itinerary.bookingOptions?.edges?.length > 0 && itinerary.bookingOptions.edges[0].node) {
+        const primaryBookingOption = itinerary.bookingOptions.edges[0].node;
+        if (primaryBookingOption.bookingUrl) {
+          bookingLink = primaryBookingOption.bookingUrl.startsWith("/")
+            ? `https://www.kiwi.com${primaryBookingOption.bookingUrl}`
+            : primaryBookingOption.bookingUrl;
+        }
+      }
+      return bookingLink;
+    };
+
+    // Helper function to format dates for display
+    const formatDateForDisplay = (dateString) => {
+      if (!dateString) return "Date not available";
+      try {
+        return new Date(dateString).toLocaleDateString();
+      } catch (error) {
+        return dateString;
+      }
+    };
+
+    // DIFFERENT RESPONSE HANDLING FOR ROUND-TRIP VS ONE-WAY
+    if (returnDate) {
+      // ROUND-TRIP RESPONSE HANDLING
+      console.log("SEARCH_FLIGHTS: Processing ROUND-TRIP response structure");
+      
+      if (response.data && Array.isArray(response.data.itineraries)) {
+        console.log(`SEARCH_FLIGHTS: Found ${response.data.itineraries.length} round-trip itineraries to process`);
+        
+        transformedFlights = response.data.itineraries.map((itinerary) => {
+          try {
+            let flightPrice = itinerary.price?.amount;
+            
+            // Update price from booking options if available
+            if (itinerary.bookingOptions?.edges?.length > 0 && itinerary.bookingOptions.edges[0].node?.price?.amount) {
+              flightPrice = itinerary.bookingOptions.edges[0].node.price.amount;
+            }
+
+            const bookingLink = extractBookingLink(itinerary);
+
+            // For round-trip, extract outbound segment info
+            const outboundSector = itinerary.outbound?.sector || itinerary.sector;
+            const returnSector = itinerary.inbound?.sector;
+            
+            const firstSegment = outboundSector?.sectorSegments?.[0]?.segment;
+            const departureInfo = firstSegment?.source;
+            const arrivalInfo = firstSegment?.destination;
+            const carrierInfo = firstSegment?.carrier;
+
+            // Extract return flight info
+            let returnInfo = null;
+            if (returnSector?.sectorSegments?.[0]?.segment) {
+              const returnSegment = returnSector.sectorSegments[0].segment;
+              returnInfo = {
+                departureTime: returnSegment.source?.localTime,
+                arrivalTime: returnSegment.destination?.localTime,
+                departureCity: returnSegment.source?.station?.city?.name,
+                arrivalCity: returnSegment.destination?.station?.city?.name,
+                departureDate: formatDateForDisplay(returnSegment.source?.localTime),
+                arrivalDate: formatDateForDisplay(returnSegment.destination?.localTime),
+              };
+            }
+
+            // Calculate total trip duration for round-trip
+            let totalDuration = "Duration not available";
+            if (firstSegment?.duration && returnSector?.sectorSegments?.[0]?.segment?.duration) {
+              const outboundDuration = firstSegment.duration;
+              const returnDuration = returnSector.sectorSegments[0].segment.duration;
+              totalDuration = formatDuration(outboundDuration + returnDuration);
+            }
+
+            return {
+              id: itinerary.id || itinerary.legacyId || `roundtrip_${Date.now()}_${Math.random()}`,
+              price: parsePrice(flightPrice),
+              currency: response.data.currency || 
+                       response.data.metadata?.currency || 
+                       itinerary.price?.currency || 
+                       "USD",
+              departureCity: departureInfo?.station?.city?.name || "Unknown City",
+              departureAirport: departureInfo?.station?.name || "Unknown Airport",
+              departureAirportCode: departureInfo?.station?.code || "N/A",
+              departureTimeLocal: departureInfo?.localTime || null,
+              departureTimeUTC: departureInfo?.utcTime || null,
+              arrivalCity: arrivalInfo?.station?.city?.name || "Unknown City",
+              arrivalAirport: arrivalInfo?.station?.name || "Unknown Airport",
+              arrivalAirportCode: arrivalInfo?.station?.code || "N/A",
+              arrivalTimeLocal: arrivalInfo?.localTime || null,
+              arrivalTimeUTC: arrivalInfo?.utcTime || null,
+              durationInSeconds: firstSegment?.duration === undefined ? null : firstSegment.duration,
+              durationFormatted: formatDuration(firstSegment?.duration),
+              totalTripDuration: totalDuration, // For round-trip total duration
+              airlineName: carrierInfo?.name || "Unknown Airline",
+              airlineCode: carrierInfo?.code || "N/A",
+              flightNumber: firstSegment?.code || "N/A",
+              bookingLink: bookingLink,
+              provider: itinerary.provider?.name || "Kiwi.com",
+              // Round-trip specific data
+              isRoundTrip: true,
+              returnInfo: returnInfo,
+              // Add flexible date info for user reference
+              originalDepartureDate: departureDate,
+              originalReturnDate: returnDate,
+              actualDepartureDate: formatDateForDisplay(departureInfo?.localTime),
+              actualReturnDate: returnInfo ? formatDateForDisplay(returnInfo.departureTime) : null,
+            };
+          } catch (error) {
+            console.error('Error transforming round-trip flight itinerary:', error);
+            return null;
+          }
+        }).filter(flight => flight !== null);
+      } else {
+        console.log("SEARCH_FLIGHTS: Round-trip response doesn't contain expected itineraries array");
+        console.log("Response data structure:", Object.keys(response.data || {}));
+      }
+    } else {
+      // ONE-WAY RESPONSE HANDLING
+      console.log("SEARCH_FLIGHTS: Processing ONE-WAY response structure");
+      
+      if (response.data && Array.isArray(response.data.itineraries)) {
+        console.log(`SEARCH_FLIGHTS: Found ${response.data.itineraries.length} one-way itineraries to process`);
+        
+        transformedFlights = response.data.itineraries.map((itinerary) => {
+          try {
+            let flightPrice = itinerary.price?.amount;
+            
+            if (itinerary.bookingOptions?.edges?.length > 0 && itinerary.bookingOptions.edges[0].node?.price?.amount) {
+              flightPrice = itinerary.bookingOptions.edges[0].node.price.amount;
+            }
+
+            const bookingLink = extractBookingLink(itinerary);
+
+            const firstSegment = itinerary.sector?.sectorSegments?.[0]?.segment;
+            const departureInfo = firstSegment?.source;
+            const arrivalInfo = firstSegment?.destination;
+            const carrierInfo = firstSegment?.carrier;
+
+            return {
+              id: itinerary.id || itinerary.legacyId || `oneway_${Date.now()}_${Math.random()}`,
+              price: parsePrice(flightPrice),
+              currency: response.data.currency || 
+                       response.data.metadata?.currency || 
+                       itinerary.price?.currency || 
+                       "USD",
+              departureCity: departureInfo?.station?.city?.name || "Unknown City",
+              departureAirport: departureInfo?.station?.name || "Unknown Airport",
+              departureAirportCode: departureInfo?.station?.code || "N/A",
+              departureTimeLocal: departureInfo?.localTime || null,
+              departureTimeUTC: departureInfo?.utcTime || null,
+              arrivalCity: arrivalInfo?.station?.city?.name || "Unknown City",
+              arrivalAirport: arrivalInfo?.station?.name || "Unknown Airport",
+              arrivalAirportCode: arrivalInfo?.station?.code || "N/A",
+              arrivalTimeLocal: arrivalInfo?.localTime || null,
+              arrivalTimeUTC: arrivalInfo?.utcTime || null,
+              durationInSeconds: firstSegment?.duration === undefined ? null : firstSegment.duration,
+              durationFormatted: formatDuration(firstSegment?.duration),
+              airlineName: carrierInfo?.name || "Unknown Airline",
+              airlineCode: carrierInfo?.code || "N/A",
+              flightNumber: firstSegment?.code || "N/A",
+              bookingLink: bookingLink,
+              provider: itinerary.provider?.name || "Kiwi.com",
+              isRoundTrip: false,
+              // Add flexible date info
+              originalDepartureDate: departureDate,
+              actualDepartureDate: formatDateForDisplay(departureInfo?.localTime),
+            };
+          } catch (error) {
+            console.error('Error transforming one-way flight itinerary:', error);
+            return null;
+          }
+        }).filter(flight => flight !== null);
+      }
     }
-    console.log(
-      `SEARCH_FLIGHTS: Transformed ${transformedFlights.length} flights.`
-    );
+
+    console.log(`SEARCH_FLIGHTS: Successfully transformed ${transformedFlights.length} flights.`);
+    
+    // Enhanced debugging for round-trip issues
+    if (returnDate && transformedFlights.length === 0) {
+      console.log("SEARCH_FLIGHTS: ⚠️  ROUND-TRIP DEBUG - No flights after transformation");
+      console.log("Response data keys:", Object.keys(response.data || {}));
+      console.log("Has itineraries?", !!response.data?.itineraries);
+      console.log("Itineraries is array?", Array.isArray(response.data?.itineraries));
+      if (response.data?.itineraries) {
+        console.log("Itineraries length:", response.data.itineraries.length);
+        if (response.data.itineraries.length > 0) {
+          console.log("First itinerary structure:", Object.keys(response.data.itineraries[0] || {}));
+        }
+      }
+      // If still no results, try a broader search suggestion
+      console.log("SEARCH_FLIGHTS: 💡 Consider trying different dates or destinations for round-trip search");
+    }
+    
     res.json(transformedFlights);
   } catch (error) {
     console.error("SEARCH_FLIGHTS: Error fetching flight data:");
+    console.error("Request URL:", requestUrl);
+    console.error("Request params:", JSON.stringify(apiParams, null, 2));
+    
     if (error.response) {
-      console.error(
-        "Flight Error Data:",
-        JSON.stringify(error.response.data, null, 2)
-      );
+      console.error("Flight Error Data:", JSON.stringify(error.response.data, null, 2));
       console.error("Flight Error Status:", error.response.status);
       res.status(error.response.status).json({
-        msg: `Error from flight API: ${
-          error.response.data?.message || "Failed to fetch flight data"
-        }`,
+        msg: `Error from flight API: ${error.response.data?.message || "Failed to fetch flight data"}`,
         details: error.response.data,
       });
     } else if (error.request) {
-      console.error(
-        "Flight Error Request (no response received):",
-        error.request
-      );
+      console.error("Flight Error Request (no response received):", error.request);
       res.status(500).json({ msg: "No response received from flight API" });
     } else {
-      console.error(
-        "Flight Error Message (error in setting up request):",
-        error.message
-      );
-      res
-        .status(500)
-        .json({ msg: "Error in setting up request to flight API" });
+      console.error("Flight Error Message (error in setting up request):", error.message);
+      res.status(500).json({ msg: "Error in setting up request to flight API" });
     }
   }
 });
+
+
 
 
 // ---------------------- ACCOMMODATIONS ROUTE (for Airbnb19 API) ---------------------------- //
