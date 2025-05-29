@@ -1,10 +1,29 @@
 
 const express = require('express');
 const router = express.Router();
+const { protect } = require("../middleware/authMiddleware");
 const bcrypt = require('bcryptjs'); // Importing bcrypt for password comparison, though hashing is in the model.
 const jwt = require('jsonwebtoken'); // Importing jsonwebtoken for creating auth tokens.
 const User = require('../models/User'); // Pulling in my User model.
 
+
+
+
+// GET /api/auth/me - Get current user profile
+router.get('/me', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.json({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      createdAt: user.createdAt
+    });
+  } catch (err) {
+    console.error('Error fetching user profile:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
 
 
 // ------------   POST api/auth/register

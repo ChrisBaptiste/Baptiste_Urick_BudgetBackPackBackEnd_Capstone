@@ -409,177 +409,236 @@ router.get("/flights", protect, async (req, res) => {
 
 // ---------------------- ACCOMMODATIONS ROUTE (for Airbnb19 API) ---------------------------- //
 
-// ENHANCED ACCOMMODATION ROUTE - Replace your existing one
 router.get('/accommodations', protect, async (req, res) => {
-    const {
-        destinationCity,
-        checkInDate,
-        checkOutDate,
-        adults = '1',
-        currency = 'USD',
-    } = req.query;
+const {
+destinationCity,
+checkInDate,
+checkOutDate,
+adults = '1',
+children = '0',
+infants = '0',
+currency = 'USD',
+priceMin,
+priceMax,
+minBedrooms,
+amenities
+} = req.query;
+if (!destinationCity || !checkInDate || !checkOutDate) {
+    return res.status(400).json({ 
+        msg: 'Please provide destination, check-in date, and check-out date.' 
+    });
+}
 
-    if (!destinationCity || !checkInDate || !checkOutDate) {
-        return res.status(400).json({ msg: 'Please provide destination, check-in date, and check-out date.' });
+const apiParams = {
+    query: destinationCity,
+    checkin: checkInDate,
+    checkout: checkOutDate,
+    adults: adults,
+    children: children || '0',
+    infants: infants || '0',
+    currency: currency,
+    guestFavorite: 'false',
+    ib: 'false'
+};
+
+// Add optional filters
+if (priceMin) apiParams.priceMin = priceMin;
+if (priceMax) apiParams.priceMax = priceMax;
+if (minBedrooms) apiParams.minBedrooms = minBedrooms;
+if (amenities) apiParams.amenities = amenities;
+
+console.log(`SEARCH_ACCOMMODATIONS: Searching with params:`, JSON.stringify(apiParams, null, 2));
+
+const optionsAccommodation = {
+    method: 'GET',
+    url: `https://${process.env.RAPIDAPI_ACCOMMODATION_API_HOST}/api/v2/searchPropertyByLocation`,
+    params: apiParams,
+    headers: {
+        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+        'X-RapidAPI-Host': process.env.RAPIDAPI_ACCOMMODATION_API_HOST
     }
+};
 
-    const apiParams = {
-        query: destinationCity,
-        checkin: checkInDate,
-        checkout: checkOutDate,
-        adults: adults,
-        currency: currency,
-    };
-
-    const optionsAccommodation = {
-        method: 'GET',
-        url: `https://${process.env.RAPIDAPI_ACCOMMODATION_API_HOST}/api/v2/searchPropertyByLocation`,
-        params: apiParams,
-        headers: {
-            'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-            'X-RapidAPI-Host': process.env.RAPIDAPI_ACCOMMODATION_API_HOST
-        }
-    };
-
-    try {
-        const response = await axios.request(optionsAccommodation);
+try {
+    const response = await axios.request(optionsAccommodation);
+    console.log(`SEARCH_ACCOMMODATIONS: API Response Status: ${response.status}`);
+    
+    let transformedAccommodations = [];
+    
+    if (response.data?.status === true && response.data?.data?.list) {
+        console.log(`SEARCH_ACCOMMODATIONS: Processing ${response.data.data.list.length} accommodations`);
         
-        let transformedAccommodations = [];
-        if (response.data?.status === true && response.data?.data?.list) {
-            console.log(`Found ${response.data.data.list.length} accommodations`);
+        transformedAccommodations = response.data.data.list.map((item) => {
+            // Based on your actual API response structure:
+            // item has: __typename, listing, contextualPictures, structuredDisplayPrice, avgRatingLocalized, title
             
-            transformedAccommodations = response.data.data.list.map(item => {
-                const listing = item.listing || item;
+            const listing = item.listing || {};
+            
+            // ✅ CORRECT PRICE EXTRACTION based on actual API structure
+            let pricePerNight = null;
+            let totalPrice = null;
+            
+            // Extract from structuredDisplayPrice (this is where the price actually is!)
+            if (item.structuredDisplayPrice) {
+                const priceData = item.structuredDisplayPrice;
                 
-                // ENHANCED: Try multiple price extraction paths
-                let pricePerNight = null;
-                let totalPrice = null;
-                
-                // Method 1: Direct price fields
-                if (listing.price?.amount) pricePerNight = parseFloat(listing.price.amount);
-                if (listing.price?.total) totalPrice = parseFloat(listing.price.total);
-                
-                // Method 2: Pricing object
-                if (listing.pricing?.rate?.amount) pricePerNight = parseFloat(listing.pricing.rate.amount);
-                if (listing.pricing?.total?.amount) totalPrice = parseFloat(listing.pricing.total.amount);
-                
-                // Method 3: Display price strings
-                if (listing.displayPrice) {
-                    const priceMatch = listing.displayPrice.match(/[\d,]+\.?\d*/);
-                    if (priceMatch) pricePerNight = parseFloat(priceMatch[0].replace(/,/g, ''));
+                // Primary price (per night)
+                if (priceData.primaryLine?.price) {
+                    // Remove $ symbol and parse
+                    const priceString = priceData.primaryLine.price.replace(/[$,]/g, '');
+                    pricePerNight = parseFloat(priceString);
                 }
                 
-                // Method 4: Structured display price
-                if (listing.structuredDisplayPrice?.primaryLine?.price) {
-                    const priceStr = listing.structuredDisplayPrice.primaryLine.price;
-                    const match = priceStr.match(/[\d,]+\.?\d*/);
-                    if (match) pricePerNight = parseFloat(match[0].replace(/,/g, ''));
+                // Total price 
+                if (priceData.secondaryLine?.price) {
+                    // Extract total price (format: "$635 total")
+                    const totalPriceMatch = priceData.secondaryLine.price.match(/\$?([\d,]+(?:\.\d{2})?)/);
+                    if (totalPriceMatch) {
+                        totalPrice = parseFloat(totalPriceMatch[1].replace(/,/g, ''));
+                    }
                 }
+            }
 
-                // ENHANCED: Try multiple image extraction paths
-                let imageUrl = null;
-                let images = [];
+            // ✅ CORRECT IMAGE EXTRACTION based on actual API structure
+            let imageUrl = null;
+            let images = [];
+            
+            // Extract from contextualPictures (this is where images actually are!)
+            if (item.contextualPictures && Array.isArray(item.contextualPictures) && item.contextualPictures.length > 0) {
+                // Get first image as main image
+                imageUrl = item.contextualPictures[0].picture;
                 
-                // Method 1: Direct images array
-                if (listing.images?.length > 0) {
-                    imageUrl = listing.images[0].url || listing.images[0].baseUrl || listing.images[0];
-                    images = listing.images.map(img => img.url || img.baseUrl || img).filter(Boolean);
-                }
-                
-                // Method 2: Picture URLs
-                if (!imageUrl && listing.pictureUrls?.length > 0) {
-                    imageUrl = listing.pictureUrls[0];
-                    images = listing.pictureUrls.slice(0, 5);
-                }
-                
-                // Method 3: Contextual pictures
-                if (!imageUrl && listing.contextualPictures?.length > 0) {
-                    imageUrl = listing.contextualPictures[0].picture;
-                    images = listing.contextualPictures.map(p => p.picture).filter(Boolean);
-                }
-                
-                // Method 4: Photo object
-                if (!imageUrl && listing.photo?.picture) {
-                    imageUrl = listing.photo.picture;
-                    images = [listing.photo.picture];
-                }
+                // Get up to 5 images
+                images = item.contextualPictures
+                    .slice(0, 5)
+                    .map(pic => pic.picture)
+                    .filter(Boolean);
+            }
 
-                // ENHANCED: Try multiple rating extraction paths
-                let rating = null;
-                let reviewCount = null;
-                
-                // Method 1: Avg rating localized
-                if (listing.avgRatingLocalized) {
-                    const ratingMatch = listing.avgRatingLocalized.match(/^([\d\.]+)/);
-                    if (ratingMatch) rating = parseFloat(ratingMatch[1]);
-                    
-                    const reviewMatch = listing.avgRatingLocalized.match(/\(([\d,]+)\)/);
-                    if (reviewMatch) reviewCount = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
+            // ✅ CORRECT RATING EXTRACTION based on actual API structure  
+            let rating = null;
+            let reviewCount = null;
+            
+            // Extract from avgRatingLocalized (format: "4.56 (227)")
+            if (item.avgRatingLocalized) {
+                const ratingMatch = item.avgRatingLocalized.match(/^([\d\.]+)/);
+                if (ratingMatch) {
+                    rating = parseFloat(ratingMatch[1]);
                 }
                 
-                // Method 2: Direct rating fields  
-                if (!rating && listing.avgRating) rating = parseFloat(listing.avgRating);
-                if (!rating && listing.rating) rating = parseFloat(listing.rating);
-                if (!reviewCount && listing.reviewsCount) reviewCount = parseInt(listing.reviewsCount, 10);
+                const reviewMatch = item.avgRatingLocalized.match(/\(([\d,]+)\)/);
+                if (reviewMatch) {
+                    reviewCount = parseInt(reviewMatch[1].replace(/,/g, ''), 10);
+                }
+            }
 
-                // ENHANCED: Better name extraction
-                let name = 'Accommodation';
-                if (listing.title) name = listing.title;
-                else if (listing.name) name = listing.name;
-                else if (listing.listingName) name = listing.listingName;
-                else if (listing.displayName) name = listing.displayName;
+            // ✅ CORRECT NAME EXTRACTION
+            const name = item.title || listing.legacyName || listing.title || 'Accommodation';
 
-                return {
-                    id: listing.id,
-                    name: name,
-                    location: listing.city || listing.neighborhood || destinationCity,
-                    destinationCity: destinationCity,
-                    pricePerNight: pricePerNight,
-                    totalPrice: totalPrice,
-                    currency: currency,
-                    rating: rating,
-                    reviewCount: reviewCount,
-                    imageUrl: imageUrl,
-                    images: images,
-                    bookingLink: `https://www.airbnb.com/rooms/${listing.id}`,
-                    provider: 'Airbnb',
-                    description: name,
-                    checkInDate: checkInDate,
-                    checkOutDate: checkOutDate,
-                    numberOfGuests: parseInt(adults, 10),
-                    // Debug info (only in development)
-                    ...(process.env.NODE_ENV === 'development' && {
-                        _debug: {
-                            hasPrice: !!pricePerNight,
-                            hasImage: !!imageUrl,
-                            hasRating: !!rating,
-                            originalKeys: Object.keys(listing)
+            // ✅ CORRECT LOCATION EXTRACTION  
+            const location = listing.legacyLocalizedCityName || 
+                           listing.legacyCity || 
+                           item.demandStayListing?.location?.localizedCityName ||
+                           item.demandStayListing?.location?.city ||
+                           destinationCity;
+
+            // ✅ HOST INFORMATION (bonus data)
+            const hostInfo = listing.primaryHostPassport ? {
+                name: listing.primaryHostPassport.name,
+                isSuperhost: listing.primaryHostPassport.isSuperhost,
+                profilePicture: listing.primaryHostPassport.thumbnailUrl,
+                yearsHosting: listing.primaryHostPassport.timeAsHost?.years,
+            } : null;
+
+            return {
+                id: listing.id || `accommodation_${Date.now()}_${Math.random()}`,
+                name: name,
+                location: location,
+                destinationCity: destinationCity,
+                pricePerNight: pricePerNight,
+                totalPrice: totalPrice,
+                currency: currency,
+                rating: rating,
+                reviewCount: reviewCount,
+                imageUrl: imageUrl,
+                images: images,
+                bookingLink: `https://www.airbnb.com/rooms/${listing.id}`,
+                provider: 'Airbnb',
+                description: name,
+                checkInDate: checkInDate,
+                checkOutDate: checkOutDate,
+                numberOfGuests: parseInt(adults, 10),
+                
+                // ✅ BONUS: Host information  
+                host: hostInfo,
+                
+                // ✅ BONUS: Badges (like Superhost)
+                badges: item.badges?.map(badge => badge.text) || [],
+                
+                // Debug information (only in development)
+                ...(process.env.NODE_ENV === 'development' && {
+                    _debug: {
+                        hasPrice: !!pricePerNight,
+                        hasImage: !!imageUrl,
+                        hasRating: !!rating,
+                        originalStructure: {
+                            hasStructuredDisplayPrice: !!item.structuredDisplayPrice,
+                            hasContextualPictures: !!item.contextualPictures,
+                            hasAvgRatingLocalized: !!item.avgRatingLocalized,
+                            listingKeys: Object.keys(listing),
+                            topLevelKeys: Object.keys(item)
                         }
-                    })
-                };
-            }).filter(Boolean);
-        }
+                    }
+                })
+            };
+        });
 
-        // Enhanced logging
-        const summary = {
-            total: transformedAccommodations.length,
-            withPrices: transformedAccommodations.filter(h => h.pricePerNight).length,
-            withImages: transformedAccommodations.filter(h => h.imageUrl).length,
-            withRatings: transformedAccommodations.filter(h => h.rating).length
-        };
-        
-        console.log(`Transformation complete: ${JSON.stringify(summary)}`);
-        
-        if (transformedAccommodations.length > 0) {
-            console.log('Sample result:', JSON.stringify(transformedAccommodations[0], null, 2));
-        }
-
-        res.json(transformedAccommodations);
-    } catch (error) {
-        console.error('Accommodation search error:', error.response?.data || error.message);
-        res.status(500).json({ msg: 'Failed to fetch accommodations' });
+        // Filter out accommodations with no useful data (optional)
+        transformedAccommodations = transformedAccommodations.filter(acc => 
+            acc.pricePerNight || acc.imageUrl || acc.rating
+        );
     }
+
+    // Enhanced logging
+    const summary = {
+        total: transformedAccommodations.length,
+        withPrices: transformedAccommodations.filter(h => h.pricePerNight).length,
+        withImages: transformedAccommodations.filter(h => h.imageUrl).length,
+        withRatings: transformedAccommodations.filter(h => h.rating).length,
+        withAllData: transformedAccommodations.filter(h => h.pricePerNight && h.imageUrl && h.rating).length
+    };
+    
+    console.log(`SEARCH_ACCOMMODATIONS: Extraction complete:`, summary);
+    
+    if (transformedAccommodations.length > 0 && process.env.NODE_ENV === 'development') {
+        console.log('SEARCH_ACCOMMODATIONS: Sample result with corrected extraction:', 
+            JSON.stringify(transformedAccommodations[0], null, 2));
+    }
+
+    res.json(transformedAccommodations);
+    
+} catch (error) {
+    console.error('SEARCH_ACCOMMODATIONS: Error:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+    });
+    
+    if (error.response) {
+        res.status(error.response.status || 500).json({
+            msg: `Accommodation search failed: ${error.response.data?.message || error.message}`,
+            details: process.env.NODE_ENV === 'development' ? error.response.data : undefined
+        });
+    } else {
+        res.status(500).json({ 
+            msg: 'Accommodation search failed - network error',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+}
 });
+
+
 
 
 // -----------------------    GET api/search/events -----------------------//

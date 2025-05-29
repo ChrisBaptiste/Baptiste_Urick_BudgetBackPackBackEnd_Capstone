@@ -1,26 +1,56 @@
-require('dotenv').config(); // Load environment variables
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const connectDB = require('./config/db'); 
+const connectDB = require('./config/db');
+const { generalLimiter, helmetConfig, errorHandler, requestLogger } = require('./middleware/security');
 
 const app = express();
 
-// Connect Database 
+// Security middleware
+app.use(helmetConfig);
+app.use(requestLogger);
+app.use(generalLimiter);
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-frontend-domain.com'] 
+    : ['http://localhost:5000', 'http://127.0.0.1:5000'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// Connect Database
 connectDB();
 
-// Init Middleware
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json({ extended: false })); // Allows us to accept JSON data in req.body
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Simple GET route for testing
-app.get('/', (req, res) => res.send('Budget-Backpack API Running!'));
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
-// Define Routes 
- app.use('/api/auth', require('./routes/authRoutes'));
- app.use('/api/trips', require('./routes/tripRoutes'));
- app.use('/api/search', require('./routes/searchRoutes'));
+// API routes
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/trips', require('./routes/tripRoutes'));
+app.use('/api/search', require('./routes/searchRoutes'));
 
+// Error handling
+app.use(errorHandler);
 
-const PORT = process.env.PORT || 5001; 
+// 404 handler
+// app.use('*', (req, res) => {
+//   res.status(404).json({ msg: 'Route not found' });
+// });
 
-app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+});
